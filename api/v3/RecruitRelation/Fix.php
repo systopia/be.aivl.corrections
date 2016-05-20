@@ -13,9 +13,9 @@ function civicrm_api3_recruit_relation_Fix($params) {
   $recruiters = array();
   $recruitRelTypeId = civicrm_api3('RelationshipType', 'Getvalue', array('name_a_b' => "recruiter_is", 'return' => 'id'));
   $query = "SELECT cc.id as contact_id, cc.first_name, cc.last_name, info.external_recruiter_id, cc.created_date as contact_created_date
-    FROM civicrm_contact cc LEFT JOIN civicrm_relationship rel ON cc.id = rel.contact_id_b
+    FROM civicrm_contact cc LEFT JOIN civicrm_relationship rel ON cc.id = rel.contact_id_b AND relationship_type_id = %1
     LEFT JOIN civicrm_value_recruiter_info info ON cc.id = info.entity_id 
-    AND relationship_type_id = %1 WHERE cc.contact_sub_type LIKE %2 AND rel.contact_id_a IS NULL";
+    WHERE cc.contact_sub_type LIKE %2";
   $queryParams = array(
     1 => array($recruitRelTypeId, 'Integer'),
     2 => array("%recruiter%", 'String'));
