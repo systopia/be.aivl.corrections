@@ -10,6 +10,11 @@
  */
 function civicrm_api3_recruit_relation_Fix($params) {
   $countFixes = NULL;
+  $directResultOrgId = civicrm_api3('Contact', 'Getvalue', array(
+    'organization_name' => "DirectResult",
+    'contact_type' => "Organization",
+    'return' => "id"
+  ));
   $recruiters = array();
   $recruitRelTypeId = civicrm_api3('RelationshipType', 'Getvalue', array('name_a_b' => "recruiter_is", 'return' => 'id'));
   $query = "SELECT cc.id as contact_id, cc.first_name, cc.last_name, info.external_recruiter_id, cc.created_date as contact_created_date
@@ -21,15 +26,22 @@ function civicrm_api3_recruit_relation_Fix($params) {
     2 => array("%recruiter%", 'String'));
   $dao = CRM_Core_DAO::executeQuery($query, $queryParams);
   while ($dao->fetch()) {
-    $csvData = _civicrm_api3_get_csv_data($dao);
-    if (!empty($csvData)) {
-      // if no recruiter_id yet, set recruiter_id
-      if (empty($dao->external_recruiter_id)) {
-        _civicrm_api3_update_recruiter_id($csvData['recruiter_id'], $dao->contact_id);
+    // if DirectResult name then set relationship for DirectResult
+    if ($dao->last_name == 'DirectResult') {
+      $csvData['recruiting_organization_id'] = $directResultOrgId;
+      $csvData['start_date'] = $dao->contact_created_date;
+      _civicrm_api3_create_relationship($csvData, $dao->contact_id , $recruitRelTypeId);
+    } else {
+      $csvData = _civicrm_api3_get_csv_data($dao);
+      if (!empty($csvData)) {
+        // if no recruiter_id yet, set recruiter_id
+        if (empty($dao->external_recruiter_id)) {
+          _civicrm_api3_update_recruiter_id($csvData['recruiter_id'], $dao->contact_id);
+        }
+        _civicrm_api3_create_relationship($csvData, $dao->contact_id, $recruitRelTypeId);
+        $countFixes++;
+        $recruiters[] = $dao->first_name . " " . $dao->last_name;
       }
-      _civicrm_api3_create_relationship($csvData, $dao->contact_id, $recruitRelTypeId);
-      $countFixes++;
-      $recruiters[] = $dao->first_name." ".$dao->last_name;
     }
   }
   return civicrm_api3_create_success(array($countFixes.' recruiters fixed:'.implode(';', $recruiters)), $params, 'RecruitRelation', 'Fix');
