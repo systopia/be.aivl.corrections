@@ -54,7 +54,9 @@ function _civicrm_api3_create_relationship($csvData, $contactId, $recruitRelType
     case 0:
       $params['start_date'] = $csvData['start_date'];
       $params['is_active'] = 1;
-      civicrm_api3('Relationship', 'Create', $params);
+      try {
+        civicrm_api3('Relationship', 'Create', $params);
+      } catch (CiviCRM_API3_Exception $ex) {}
       break;
     // check if active and if not, make active
     case 1:
@@ -62,23 +64,31 @@ function _civicrm_api3_create_relationship($csvData, $contactId, $recruitRelType
       if ($current['is_active'] == 0) {
         $params['is_active'] = 1;
         $params['id'] = $current['id'];
-        civicrm_api3('Relationship', 'Create', $params);
+        try {
+          civicrm_api3('Relationship', 'Create', $params);
+        } catch (CiviCRM_API3_Exception $ex) {}
       }
       break;
   }
 }
 
 /**
- * Function to update the recruiter id custom field for the contact
+ * Function to update or create the recruiter id custom field for the contact
  *
  * @param $recruiterId
  * @param $contactId
  */
 function _civicrm_api3_update_recruiter_id($recruiterId, $contactId) {
-  $query = "UPDATE civicrm_value_recruiter_info SET external_recruiter_id = %1 WHERE entity_id = %2";
   $params = array(
     1 => array($recruiterId, 'String'),
     2 => array($contactId, 'Integer'));
+  $countQuery = "SELECT COUNT(*) FROM civicrm_value_recruiter_info WHERE entity_id = %1";
+  $count = CRM_Core_DAO::singleValueQuery($countQuery, array(1 => array($contactId, 'Integer')));
+  if ($count > 0) {
+    $query = "UPDATE civicrm_value_recruiter_info SET external_recruiter_id = %1 WHERE entity_id = %2";
+  } else {
+    $query = "INSERT INTO civicrm_value_recruiter_info (external_recruiter_id, entity_id) VALUES(%1, %2)";
+  }
   CRM_Core_DAO::executeQuery($query, $params);
 }
 
