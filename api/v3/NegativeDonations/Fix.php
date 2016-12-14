@@ -41,23 +41,35 @@ function civicrm_api3_negative_donations_fix($params) {
 }
 
 
-function civicrm_negative_donations_fix($refund_id, $original_ids, $params) {
+function civicrm_negative_donations_fix($refund_id, $original_ids, &$params) {
   // load contributions
   $refund = civicrm_api3('Contribution', 'getsingle', array('id' => $refund_id));
   $originals = civicrm_api3('Contribution', 'get', array('id' => array('IN' => explode(',', $original_ids))));
 
   // do some sanity checks
   if ($refund['contribution_status_id'] != 1) {
+    if (!empty($params['logger'])) {
+      fputs($params['logger'], "\n\nContribution [{$refund['id']}] has status {$refund['contribution_status_id']}. Ignored\n");
+      fflush($params['logger']);
+    }
     return 0;
   }
   if ($originals['count'] < 1) {
+    if (!empty($params['logger'])) {
+      fputs($params['logger'], "\n\nNone of the contributions ({$original_ids}) for refund [{$refund['id']}] were found. Ignored\n");
+      fflush($params['logger']);
+    }
     return 0; 
   }
   foreach ($originals['values'] as $original) {
-    $original['contribution_status_id'] != 1;
-    return 0;
+    if ($original['contribution_status_id'] != 1) {
+      if (!empty($params['logger'])) {
+        fputs($params['logger'], "\n\nOrigianl Contributions [{$original['contribution_status_id']}] for refund [{$refund['id']}] has status {$original['contribution_status_id']}. Ignored\n");
+        fflush($params['logger']);
+      }
+      return 0;
+    }
   }
-
 
   // ready, let's go:
 
@@ -78,6 +90,7 @@ function civicrm_negative_donations_fix($refund_id, $original_ids, $params) {
     foreach ($originals['values'] as $original) {
       fputs($params['logger'], "Will set contribution {$original['id']} to 'Refunded'");
     }
+    fflush($params['logger']);
   }
 
   if (!empty($params['doit'])) {
