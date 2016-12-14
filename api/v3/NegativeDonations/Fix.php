@@ -38,9 +38,11 @@ function civicrm_api3_negative_donations_fix($params) {
 
 function civicrm_negative_donations_fix($refund_id, $original_ids, $params) {
   // load contributions
-  error_log("MENDING {$original_ids}, deleting {$refund_id}");
+  error_log("MENDING {$original_ids}, DELETING {$refund_id}");
   $refund = civicrm_api3('Contribution', 'getsingle', array('id' => $refund_id));
+  error_log("REFUND: " . json_encode($refund));
   $originals = civicrm_api3('Contribution', 'get', array('id' => array('IN' => explode($original_ids, ','))));
+  error_log("ORIGINALS: " . json_encode($originals));
 
   // do some sanity checks
   if ($refund['contribution_status_id'] != 1) {
