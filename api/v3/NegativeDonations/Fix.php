@@ -9,10 +9,12 @@
  */
 function civicrm_api3_negative_donations_fix($params) {
   $total_counter = $change_counter = 0;
+  $matches = array();
   if (!empty($params['log_file'])) {
     $params['logger'] = fopen($params['log_file'], 'w');
   }
 
+  // FIRST APPROACH: FIND THE ONE IDENTICAL CONTRIBUTION
   $sql1 = "SELECT refund.id                      AS refund_id,
                   GROUP_CONCAT(original.id)      AS original_ids,
                   COUNT(original.id)             AS original_count,
@@ -30,8 +32,38 @@ function civicrm_api3_negative_donations_fix($params) {
 
   $dao = CRM_Core_DAO::executeQuery($sql1);
   while ($dao->fetch()) {
-    $total_counter += 1;
     if ($dao->original_count == 1) {
+      $total_counter += 1;
+      $matches[$dao->refund_id] = $dao->original_ids;
+      $params['refund_note'] = $dao->refund_note;
+      $change_counter += civicrm_negative_donations_fix($dao->refund_id, $dao->original_ids, $params);
+    }
+  }
+
+
+  // SECOND APPROACH: FIND MULTIPLE CONTRIBUTIONS IN A CERTAIN TIME
+  $sql2 = "SELECT
+              civicrm_note.note  AS refund_note,
+              refund.id          AS refund_id,
+              (SELECT GROUP_CONCAT(original.id)
+                 FROM civicrm_contribution original
+                 WHERE original.contact_id = refund.contact_id
+                   AND original.receive_date < refund.receive_date
+                   AND DATEDIFF(refund.receive_date, original.receive_date) < 25) AS original_ids
+            FROM civicrm_contribution refund
+            LEFT JOIN civicrm_note ON civicrm_note.entity_table = 'civicrm_contribution' AND civicrm_note.entity_id = refund.id
+            WHERE refund.total_amount < 0
+              AND refund.contact_id NOT IN (64599,63444,71866,35)
+              AND -refund.total_amount = (SELECT SUM(original.total_amount)
+                                           FROM civicrm_contribution original
+                                           WHERE original.contact_id = refund.contact_id
+                                             AND original.receive_date < refund.receive_date
+                                             AND DATEDIFF(refund.receive_date, original.receive_date) < 25);";
+  $dao = CRM_Core_DAO::executeQuery($sql2);
+  while ($dao->fetch()) {
+    if (!isset($matches[$dao->refund_id])) {
+      $total_counter += 1;
+      $matches[$dao->refund_id] = $dao->original_ids;
       $params['refund_note'] = $dao->refund_note;
       $change_counter += civicrm_negative_donations_fix($dao->refund_id, $dao->original_ids, $params);
     }
@@ -83,7 +115,7 @@ function civicrm_negative_donations_fix($refund_id, $original_ids, &$params) {
 
   if (!empty($params['logger'])) {
     fputs($params['logger'], "\n\nFix and refund contribution [{$refund['id']}]:\n");
-    fputs($params['logger'], "Message will is: {$cancel_reason}\n");
+    fputs($params['logger'], "Message is: {$cancel_reason}\n");
     fputs($params['logger'], "Refund date is: {$refund['receive_date']}\n");
     fputs($params['logger'], "Refund account is: {$refund_account}\n");
 
