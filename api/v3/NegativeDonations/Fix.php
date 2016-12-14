@@ -115,12 +115,12 @@ function civicrm_negative_donations_fix($refund_id, $original_ids, &$params) {
 
   if (!empty($params['logger'])) {
     fputs($params['logger'], "\n\nFix and refund contribution [{$refund['id']}]:\n");
-    fputs($params['logger'], "Message is: {$cancel_reason}\n");
+    fputs($params['logger'], "Message is: \"{$cancel_reason}\"\n");
     fputs($params['logger'], "Refund date is: {$refund['receive_date']}\n");
     fputs($params['logger'], "Refund account is: {$refund_account}\n");
 
     foreach ($originals['values'] as $original) {
-      fputs($params['logger'], "Will set contribution {$original['id']} to 'Refunded'");
+      fputs($params['logger'], "Will set contribution {$original['id']} to 'Refunded'\n");
     }
     fflush($params['logger']);
   }
