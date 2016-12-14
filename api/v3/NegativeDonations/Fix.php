@@ -8,7 +8,11 @@
  * @see https://civicoop.plan.io/issues/90
  */
 function civicrm_api3_negative_donations_fix($params) {
-  $counter = 0;
+  $total_counter = $change_counter = 0;
+  if (!empty($params['log_file'])) {
+    $params['logger'] = open($params['log_file'], 'w');
+  }
+
   $sql1 = "SELECT refund.id                      AS refund_id,
                   GROUP_CONCAT(original.id)      AS original_ids,
                   COUNT(original.id)             AS original_count,
@@ -26,23 +30,21 @@ function civicrm_api3_negative_donations_fix($params) {
 
   $dao = CRM_Core_DAO::executeQuery($sql1);
   while ($dao->fetch()) {
+    $total_counter += 1;
     if ($dao->original_count == 1) {
       $params['refund_note'] = $dao->refund_note;
-      $counter += civicrm_negative_donations_fix($dao->refund_id, $dao->original_ids, $params);
+      $change_counter += civicrm_negative_donations_fix($dao->refund_id, $dao->original_ids, $params);
     }
   }
 
-  return civicrm_api3_create_success($counter);
+  return civicrm_api3_create_success(array('total' => $total_counter, 'changed' => $change_counter));
 }
 
 
 function civicrm_negative_donations_fix($refund_id, $original_ids, $params) {
   // load contributions
-  error_log("MENDING {$original_ids}, DELETING {$refund_id}");
   $refund = civicrm_api3('Contribution', 'getsingle', array('id' => $refund_id));
-  // error_log("REFUND: " . json_encode($refund));
   $originals = civicrm_api3('Contribution', 'get', array('id' => array('IN' => explode(',', $original_ids))));
-  // error_log("ORIGINALS: " . json_encode($originals));
 
   // do some sanity checks
   if ($refund['contribution_status_id'] != 1) {
@@ -57,15 +59,29 @@ function civicrm_negative_donations_fix($refund_id, $original_ids, $params) {
   }
 
 
-  // ready, let's go
+  // ready, let's go:
+
+  // calculate cancel reason
+  $cancel_reason = "Negative contribution cleanup, deleted [{$refund['id']}]";
+  if (!empty($params['refund_note'])) {
+    $cancel_reason .= ": {$params['refund_note']}";
+  }
+  // calculate refund account
+  $refund_account = ($refund['receive_date'] < "2016-05-01") ? 'BE69068068487178' : 'BE31890234567855';
+
+  if (!empty($params['logger'])) {
+    fputs($params['logger'], "\n\nFix and refund contribution [{$refund['id']}]:\n");
+    fputs($params['logger'], "Message will is: {$cancel_reason}\n");
+    fputs($params['logger'], "Refund date is: {$refund['receive_date']}\n");
+    fputs($params['logger'], "Refund account is: {$refund_account}\n");
+
+    foreach ($originals['values'] as $original) {
+      fputs($params['logger'], "Will set contribution {$original['id']} to 'Refunded'");
+    }
+  }
+
   if (!empty($params['doit'])) {
     foreach ($originals['values'] as $original) {
-      // calculate cancel reason
-      $cancel_reason = "Negative contribution cleanup, deleted [{$refund['id']}]";
-      if (!empty($params['refund_note'])) {
-        $cancel_reason .= ": {$params['refund_note']}";
-      }
-
       // mark all matched contributions as 'refunded'
       civicrm_api3('Contribution', 'create', array(
         'id'                     => $original['id'],
