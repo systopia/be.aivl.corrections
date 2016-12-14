@@ -10,7 +10,7 @@
 function civicrm_api3_negative_donations_fix($params) {
   $total_counter = $change_counter = 0;
   if (!empty($params['log_file'])) {
-    $params['logger'] = open($params['log_file'], 'w');
+    $params['logger'] = fopen($params['log_file'], 'w');
   }
 
   $sql1 = "SELECT refund.id                      AS refund_id,
